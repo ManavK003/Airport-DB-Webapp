@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Airport Database Project</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <h1>Airport Database Management System</h1>
+
+  <p>Welcome to my database project for managing airport data, landings, flights, airlines, and pilots.</p>
+
+  <h2>Project Problem</h2>
+  <p>This project solves the problem of efficiently storing, managing, and analyzing airport operations using a PostgreSQL database. It provides structured data storage, easy querying, and operational insights for better decision-making.</p>
+
+  <h2>SQL Queries Used</h2>
+  <ul>
+    <li>
+      <b>Total Landed Weight by Airline:</b><br>
+      <code>
+        SELECT a.name AS airline_name, SUM(l.total_landed_weight) AS total_landed_weight<br>
+        FROM landings l<br>
+        JOIN airlines a ON l.airline_id = a.airline_id<br>
+        GROUP BY a.name<br>
+        ORDER BY total_landed_weight DESC;
+      </code>
+    </li>
+    <li>
+        <br>
+
+      <b>Total Landed Weight by Airline and Flight ID:</b><br>
+      <code>
+        SELECT a.name AS airline_name, f.flight_id, SUM(l.total_landed_weight) AS total_landed_weight<br>
+        FROM landings l<br>
+        JOIN flights f ON l.flight_id = f.flight_id<br>
+        JOIN airlines a ON f.airline_id = a.airline_id<br>
+        GROUP BY a.name, f.flight_id<br>
+        ORDER BY total_landed_weight DESC;
+      </code>
+    </li>
+    <li>
+        <br>
+
+      <b>Total Number of Delays by Flight and Airline:</b><br>
+      <code>
+        SELECT d.flight_id, a.name AS airline_name, COUNT(d.delay_id) AS total_delays<br>
+        FROM delays d<br>
+        JOIN flights f ON d.flight_id = f.flight_id<br>
+        JOIN airlines a ON f.airline_id = a.airline_id<br>
+        GROUP BY d.flight_id, a.name<br>
+        ORDER BY total_delays DESC;
+      </code>
+    </li>
+  </ul>
+
+  <h2>Insights from Data</h2>
+  <ul>
+    <li>Airlines with higher total landed weights likely operate larger or more frequent flights. Major carriers like Delta or United Airlines are expected to dominate this category.</li><br>
+
+    <li>Certain flights significantly contribute more to an airline’s overall traffic, either due to heavier aircraft or more frequent usage.</li><br>
+
+    <li>Some flights and airlines experience significantly more delays, suggesting operational inefficiencies or external disruptions.</li><br>
+
+  </ul>
+
+  <h2>Dashboard Links</h2>
+  <ul>
+    <li><a href="https://public.tableau.com/app/profile/manav.madhusudhana.kanaganapalli/viz/AirportDatabaseProject/Sheet1?publish=yes" target="_blank">Dashboard 1: Total Landed Weight by Airline</a></li>
+    <li><a href="https://public.tableau.com/app/profile/manav.madhusudhana.kanaganapalli/viz/AirportDatabaseProject/Sheet2?publish=yes" target="_blank">Dashboard 2: Total Landed Weight by Airline and Flight ID</a></li>
+    <li><a href="https://public.tableau.com/app/profile/manav.madhusudhana.kanaganapalli/viz/AirportDatabaseProject/Sheet3?publish=yes" target="_blank">Dashboard 3: Total Number of Delays by Flight and Airline</a></li>
+  </ul>
+
+</body>
+</html>
