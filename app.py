@@ -24,25 +24,27 @@ def index():
 
 @app.route('/api/airports/search')
 def search_airports():
-    city = request.args.get('city', '').strip()
-
-
-    if not city:
-        # If city is empty, don't query the DB – return empty list or message
+    query = request.args.get('city', '').strip()
+    if not query:
         return jsonify([])
 
     cur = conn.cursor()
     try:
-        cur.execute("ROLLBACK")
-        cur.execute("SELECT * FROM airports WHERE country ILIKE %s LIMIT 50", (f"%{city}%",))
+        cur.execute("ROLLBACK")  # reset if previous error occurred
+        cur.execute("""
+            SELECT * FROM airports
+            WHERE city ILIKE %s OR country ILIKE %s OR iata ILIKE %s OR icao ILIKE %s
+            LIMIT 50
+        """, (f"%{query}%", f"%{query}%", f"%{query}%", f"%{query}%"))
+        
         results = cur.fetchall()
-        print("RESULTS:", results)
         columns = [desc[0] for desc in cur.description]
         return jsonify([dict(zip(columns, row)) for row in results])
     except Exception as e:
-        print("ERROR in /api/airports/search:", e)
+        print("❌ ERROR in /api/airports/search:", e)
         cur.execute("ROLLBACK")
         return jsonify({"error": str(e)}), 500
+
 
 
 

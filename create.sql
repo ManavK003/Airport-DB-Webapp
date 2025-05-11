@@ -16,10 +16,16 @@ CREATE TABLE aircraft (
 
 -- 3. Airports
 CREATE TABLE airports (
-  airport_id        INTEGER      PRIMARY KEY,
-  location          VARCHAR(100) NOT NULL,
-  country           VARCHAR( 50 ) NOT NULL
+  airport_id   INTEGER PRIMARY KEY,
+  name         VARCHAR(100),
+  city         VARCHAR(100),
+  country      VARCHAR(100),
+  iata         VARCHAR(10),
+  icao         VARCHAR(10),
+  latitude     FLOAT,
+  longitude    FLOAT
 );
+
 
 -- 4. Runways
 CREATE TABLE runways (
