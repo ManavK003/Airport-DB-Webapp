@@ -3,6 +3,8 @@ import psycopg2
 from dotenv import load_dotenv
 import os
 
+
+
 load_dotenv()
 app = Flask(__name__)
 
@@ -14,6 +16,8 @@ conn = psycopg2.connect(
     port=os.getenv("DB_PORT")
 )
 
+
+
 @app.route('/')
 def index():
     return render_template('index.html')
@@ -21,6 +25,7 @@ def index():
 @app.route('/api/airports/search')
 def search_airports():
     city = request.args.get('city', '').strip()
+
 
     if not city:
         # If city is empty, don't query the DB – return empty list or message
@@ -31,11 +36,11 @@ def search_airports():
         cur.execute("ROLLBACK")
         cur.execute("SELECT * FROM airports WHERE country ILIKE %s LIMIT 50", (f"%{city}%",))
         results = cur.fetchall()
-        print("🔍 RESULTS:", results)
+        print("RESULTS:", results)
         columns = [desc[0] for desc in cur.description]
         return jsonify([dict(zip(columns, row)) for row in results])
     except Exception as e:
-        print("❌ ERROR in /api/airports/search:", e)
+        print("ERROR in /api/airports/search:", e)
         cur.execute("ROLLBACK")
         return jsonify({"error": str(e)}), 500
 
