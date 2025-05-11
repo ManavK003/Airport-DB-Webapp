@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>🛫 Airport Dashboard</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header>
+    <h1>Airport Intelligence Dashboard</h1>
+  </header>
+  <div class="content-wrapper"> 
+  <section>
+    <h2>🔍 Search Airports by Country</h2>
+    <input type="text" id="city" placeholder="e.g., Canada">
+    <button onclick="searchAirports()">Search</button>
+    <pre id="airport-results"></pre>
+  </section>
+
+  <section>
+    <h2>Top 10 Delays</h2>
+    <button onclick="getDelays()">View Delays</button>
+    <pre id="delay-results"></pre>
+  </section>
+
+  <section>
+    <h2>Landings Stats</h2>
+    <button onclick="getLandings()">Show Landings</button>
+    <pre id="landing-results"></pre>
+  </section>
+
+  <section>
+    <h2>Weather by Airport Code</h2>
+    <input type="text" id="weather-code" placeholder="e.g., JFK">
+    <button onclick="getWeather()">Check Weather</button>
+    <pre id="weather-results"></pre>
+  </section>
+
+  <section>
+    <h2>Pilot Lookup</h2>
+    <input type="text" id="pilot-id" placeholder="Pilot ID">
+    <button onclick="getPilot()">Find Pilot</button>
+    <pre id="pilot-results"></pre>
+  </section>
+
+  <script>
+    async function searchAirports() {
+        const city = document.getElementById('city').value;
+        const res = await fetch(`/api/airports/search?city=${city}`);
+        const data = await res.json();
+    
+        const output = document.getElementById('airport-results');
+        output.innerHTML = ''; // clear old
+    
+        if (!data.length) {
+            output.innerHTML = '<p class="no-results">No results found.</p>';
+          return;
+        }
+    
+        const table = document.createElement('table');
+        table.className = 'result-table';
+    
+        const headers = Object.keys(data[0]);
+        const thead = document.createElement('thead');
+        const headRow = document.createElement('tr');
+        headers.forEach(h => {
+          const th = document.createElement('th');
+          th.textContent = h;
+          headRow.appendChild(th);
+        });
+        thead.appendChild(headRow);
+        table.appendChild(thead);
+    
+        const tbody = document.createElement('tbody');
+        data.forEach(row => {
+          const tr = document.createElement('tr');
+          headers.forEach(h => {
+            const td = document.createElement('td');
+            td.textContent = row[h];
+            tr.appendChild(td);
+          });
+          tbody.appendChild(tr);
+        });
+        table.appendChild(tbody);
+    
+        output.appendChild(table);
+      }
+
+    async function getDelays() {
+      const res = await fetch('/api/delays/top');
+      document.getElementById('delay-results').textContent = JSON.stringify(await res.json(), null, 2);
+    }
+
+    async function getLandings() {
+      const res = await fetch('/api/landings/stats');
+      document.getElementById('landing-results').textContent = JSON.stringify(await res.json(), null, 2);
+    }
+
+    async function getWeather() {
+      const code = document.getElementById('weather-code').value;
+      const res = await fetch(`/api/weather/by-airport?code=${code}`);
+      document.getElementById('weather-results').textContent = JSON.stringify(await res.json(), null, 2);
+    }
+
+    async function getPilot() {
+      const id = document.getElementById('pilot-id').value;
+      const res = await fetch(`/api/pilots/${id}`);
+      document.getElementById('pilot-results').textContent = JSON.stringify(await res.json(), null, 2);
+    }
+  </script>
+</body>
+</html>
+
