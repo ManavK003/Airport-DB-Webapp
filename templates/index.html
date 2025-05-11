@@ -4,91 +4,121 @@
   <meta charset="UTF-8">
   <title>🛫 Airport Dashboard</title>
   <link rel="stylesheet" href="/static/style.css">
+
+
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 </head>
 <body>
   <header>
-    <h1>Airport Intelligence Dashboard</h1>
+    <h1>Global Airport Search Database</h1>
   </header>
+
   <div class="content-wrapper"> 
-  <section>
-    <h2>🔍 Search Airports by City, Country, or IATA Code</h2>
-    <input type="text" id="city" placeholder="e.g., Toronto or Canada or JFK">
-    <button onclick="searchAirports()">Search</button>
-    <pre id="airport-results"></pre>
-  </section>
 
-  <section>
-    <h2>Top 10 Delays</h2>
-    <button onclick="getDelays()">View Delays</button>
-    <pre id="delay-results"></pre>
-  </section>
-
-  <section>
-    <h2>Landings Stats</h2>
-    <button onclick="getLandings()">Show Landings</button>
-    <pre id="landing-results"></pre>
-  </section>
+    <section>
+      <h2>🔍 Search Airports by City, Country, or IATA Code</h2>
+      <input type="text" id="city" placeholder="e.g., Toronto or Canada or JFK">
+      <button onclick="searchAirports()">Search</button>
+      <pre id="airport-results"></pre>
+    </section>
 
 
-  <section>
-    <h2>Weather by Airport Code</h2>
-    <input type="text" id="weather-code" placeholder="e.g., JFK">
-    <button onclick="getWeather()">Check Weather</button>
-    <pre id="weather-results"></pre>
-  </section>
+    <section>
+      <h2>🌍 Map of Search Results</h2>
+      <div id="map" style="height: 400px; margin-top: 10px;"></div>
+    </section>
 
 
-  <section>
-    <h2>Pilot Lookup</h2>
-    <input type="text" id="pilot-id" placeholder="Pilot ID">
-    <button onclick="getPilot()">Find Pilot</button>
-    <pre id="pilot-results"></pre>
-  </section>
+    <section>
+      <h2>Top 10 Delays</h2>
+      <button onclick="getDelays()">View Delays</button>
+      <pre id="delay-results"></pre>
+    </section>
 
+
+    <section>
+      <h2>Landings Stats</h2>
+      <button onclick="getLandings()">Show Landings</button>
+      <pre id="landing-results"></pre>
+    </section>
+
+
+    <section>
+      <h2>Weather by Airport Code</h2>
+      <input type="text" id="weather-code" placeholder="e.g., JFK">
+      <button onclick="getWeather()">Check Weather</button>
+      <pre id="weather-results"></pre>
+    </section>
+
+
+    <section>
+      <h2>Pilot Lookup</h2>
+      <input type="text" id="pilot-id" placeholder="Pilot ID">
+      <button onclick="getPilot()">Find Pilot</button>
+      <pre id="pilot-results"></pre>
+    </section>
+  </div>
 
 
   <script>
+    let map;
+
     async function searchAirports() {
-        const city = document.getElementById('city').value;
-        const res = await fetch(`/api/airports/search?city=${city}`);
-        const data = await res.json();
-    
-        const output = document.getElementById('airport-results');
-        output.innerHTML = ''; // clear old
-    
-        if (!data.length) {
-            output.innerHTML = '<p class="no-results">No results found.</p>';
-          return;
-        }
-    
-        const table = document.createElement('table');
-        table.className = 'result-table';
-    
-        const headers = Object.keys(data[0]);
-        const thead = document.createElement('thead');
-        const headRow = document.createElement('tr');
-        headers.forEach(h => {
-          const th = document.createElement('th');
-          th.textContent = h;
-          headRow.appendChild(th);
-        });
-        thead.appendChild(headRow);
-        table.appendChild(thead);
-    
-        const tbody = document.createElement('tbody');
-        data.forEach(row => {
-          const tr = document.createElement('tr');
-          headers.forEach(h => {
-            const td = document.createElement('td');
-            td.textContent = row[h];
-            tr.appendChild(td);
-          });
-          tbody.appendChild(tr);
-        });
-        table.appendChild(tbody);
-    
-        output.appendChild(table);
+      const city = document.getElementById('city').value;
+      const res = await fetch(`/api/airports/search?city=${city}`);
+      const data = await res.json();
+
+      const output = document.getElementById('airport-results');
+      output.innerHTML = '';
+
+      if (!data.length) {
+        output.innerHTML = '<p class="no-results">No results found.</p>';
+        return;
       }
+
+      
+      const table = document.createElement('table');
+      table.className = 'result-table';
+      const headers = Object.keys(data[0]);
+      const thead = document.createElement('thead');
+      const headRow = document.createElement('tr');
+      headers.forEach(h => {
+        const th = document.createElement('th');
+        th.textContent = h;
+        headRow.appendChild(th);
+      });
+      thead.appendChild(headRow);
+      table.appendChild(thead);
+
+      const tbody = document.createElement('tbody');
+      data.forEach(row => {
+        const tr = document.createElement('tr');
+        headers.forEach(h => {
+          const td = document.createElement('td');
+          td.textContent = row[h];
+          tr.appendChild(td);
+        });
+        tbody.appendChild(tr);
+      });
+      table.appendChild(tbody);
+      output.appendChild(table);
+
+      
+      if (map) {
+        map.remove();  // reset old map
+      }
+      map = L.map('map').setView([20, 0], 2);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+
+      data.forEach(({ name, city, country, latitude, longitude }) => {
+        if (latitude && longitude) {
+          L.marker([latitude, longitude])
+            .addTo(map)
+            .bindPopup(`<strong>${name}</strong><br>${city}, ${country}`);
+        }
+      });
+    }
 
     async function getDelays() {
       const res = await fetch('/api/delays/top');
@@ -114,4 +144,5 @@
   </script>
 </body>
 </html>
+
 
