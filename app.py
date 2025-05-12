@@ -258,6 +258,39 @@ def lookup_icao24(callsign):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@app.route('/api/airline_stats')
+def airline_stats():
+    airport_code = request.args.get('airport', '').upper()
+    cur = conn.cursor()
+
+    try:
+        if airport_code:
+            cur.execute("""
+                SELECT carrier_name, airport_code,
+                       total_flights,
+                       on_time_flights,
+                       ROUND((on_time_flights * 100.0) / NULLIF(total_flights, 0), 2) AS on_time_pct
+                FROM airline_statistics
+                WHERE airport_code = %s
+                ORDER BY on_time_pct DESC
+                LIMIT 10
+            """, (airport_code,))
+        else:
+            cur.execute("""
+                SELECT carrier_name, airport_code,
+                       total_flights,
+                       on_time_flights,
+                       ROUND((on_time_flights * 100.0) / NULLIF(total_flights, 0), 2) AS on_time_pct
+                FROM airline_statistics
+                ORDER BY on_time_pct DESC
+                LIMIT 10
+            """)
+
+        rows = cur.fetchall()
+        columns = [desc[0] for desc in cur.description]
+        return jsonify([dict(zip(columns, row)) for row in rows])
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 @app.route('/api/landings/stats')
 def landing_stats():

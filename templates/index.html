@@ -14,6 +14,7 @@
 
   <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
   <header>
@@ -51,6 +52,7 @@
             }
           </style>
         <p style="margin-left: 0.3em;">OpenSky Network API was used as a data source to pull the most recent flight tracking data. Popular and major airport codes to try: EHAM, EGLL, and EDDF.</p>
+        <p style="margin-left: 0.3em;">If you don't see live flight tracking icons on map, it might be because my OpenSky Free API has reached too many requests and has timed out.<br>This might require 3-5 mins to reset because flight tracking can be seen again.</p>
       </section>
 
     <section>
@@ -81,27 +83,17 @@
         <button onclick="getFlightStatus()">Check Status</button>
         <pre id="flight-status-results"></pre>
       </section>
-    <section>
-      <h2>Landings Stats</h2>
-      <button onclick="getLandings()">Show Landings</button>
-      <pre id="landing-results"></pre>
-    </section>
-
-
-    <section>
-      <h2>Weather by Airport Code</h2>
-      <input type="text" id="weather-code" placeholder="e.g., JFK">
-      <button onclick="getWeather()">Check Weather</button>
-      <pre id="weather-results"></pre>
-    </section>
-
-
-    <section>
-      <h2>Pilot Lookup</h2>
-      <input type="text" id="pilot-id" placeholder="Pilot ID">
-      <button onclick="getPilot()">Find Pilot</button>
-      <pre id="pilot-results"></pre>
-    </section>
+      <section>
+        <h2>📊 Airline On-Time Stats</h2>
+        <input type="text" id="stat-airport" placeholder="Optional airport code (e.g., JFK)">
+        <button onclick="loadAirlineStats()">Show Stats</button>
+        <pre id="airline-stats-results"></pre>
+        <div style="max-width: 500px; margin-top: 20px;">
+            <canvas id="airlineChart"></canvas>
+          </div>
+      </section>
+      
+    
   </div>
 
 
@@ -402,6 +394,101 @@ async function getRealTimeDelays() {
     output.textContent = result;
   }
   
+  let airlineChart; 
+
+async function loadAirlineStats() {
+  const code = document.getElementById("stat-airport").value.trim().toUpperCase();
+  const res = await fetch(`/api/airline_stats${code ? `?airport=${code}` : ''}`);
+  const data = await res.json();
+  const output = document.getElementById("airline-stats-results");
+
+  if (data.error) {
+    output.textContent = `❌ ${data.error}`;
+    return;
+  }
+
+  if (!data.length) {
+    output.textContent = "No stats found.";
+    return;
+  }
+
+ 
+  let result = `📈 Airline On-Time Performance${code ? ` at ${code}` : ''}:\n\n`;
+  result += `Carrier          | Flights | On-Time %\n`;
+  result += `-----------------|---------|-----------\n`;
+
+  const labels = [];
+  const values = [];
+
+  data.forEach(row => {
+    const onTime = Number(row.on_time_pct);
+    const displayPct = isNaN(onTime) ? "N/A" : `${onTime.toFixed(2)}%`;
+    result += `${row.carrier_name.padEnd(17)}| ${row.total_flights.toString().padEnd(7)}| ${displayPct}\n`;
+
+    labels.push(row.carrier_name);
+    values.push(onTime);
+  });
+
+  output.textContent = result;
+
+  // Draw or update the chart
+  const ctx = document.getElementById('airlineChart').getContext('2d');
+  if (airlineChart) {
+    airlineChart.destroy(); 
+  }
+
+  airlineChart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: labels,
+      datasets: [{
+        label: 'On-Time %',
+        data: values,
+        backgroundColor: 'rgba(0, 153, 255, 0.6)',
+        borderColor: 'rgba(0, 102, 204, 1)',
+        borderWidth: 1
+      }]
+    },
+    options: {
+        responsive: true,
+        scales: {
+          y: {
+            beginAtZero: true,
+            max: 100,
+            title: {
+              display: true,
+              text: 'Percentage (%)',
+              color: '#ffffff'  // Y-axis label
+            },
+            ticks: {
+              color: '#ffffff'  // Y-axis tick labels
+            }
+          },
+          x: {
+            ticks: {
+              color: '#ffffff'  // X-axis labels
+            }
+          }
+        },
+        plugins: {
+          legend: {
+            display: false,
+            labels: {
+              color: '#ffffff'  // Legend text if you enable it
+            }
+          },
+          tooltip: {
+            callbacks: {
+              label: function(context) {
+                return ` ${context.parsed.y.toFixed(2)}% on-time`;
+              }
+            }
+          }
+        }
+      }
+  });
+}
+
   
     
 
@@ -470,25 +557,7 @@ async function getRealTimeDelays() {
     }
 
 
-    async function getLandings() {
-      const res = await fetch('/api/landings/stats');
-      document.getElementById('landing-results').textContent = JSON.stringify(await res.json(), null, 2);
-    }
-
-
-    async function getWeather() {
-      const code = document.getElementById('weather-code').value;
-      const res = await fetch(`/api/weather/by-airport?code=${code}`);
-      document.getElementById('weather-results').textContent = JSON.stringify(await res.json(), null, 2);
-    }
-
-
-
-    async function getPilot() {
-      const id = document.getElementById('pilot-id').value;
-      const res = await fetch(`/api/pilots/${id}`);
-      document.getElementById('pilot-results').textContent = JSON.stringify(await res.json(), null, 2);
-    }
+   
   </script>
 </body>
 </html>
