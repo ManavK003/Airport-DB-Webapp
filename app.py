@@ -48,7 +48,25 @@ def search_airports():
         cur.execute("ROLLBACK")
         return jsonify({"error": str(e)}), 500
 
+FLIGHTAWARE_API_KEY = os.getenv("FLIGHTAWARE_API_KEY")
 
+@app.route('/api/delays/by-airport')
+def get_delays_by_airport():
+    code = request.args.get("code", "").upper()
+    if not code:
+        return jsonify({"error": "Airport code is required"}), 400
+
+    url = f"https://aeroapi.flightaware.com/aeroapi/airports/{code}/delays"
+    headers = {
+        "x-apikey": FLIGHTAWARE_API_KEY
+    }
+
+    try:
+        response = requests.get(url, headers=headers)
+        response.raise_for_status()
+        return jsonify(response.json())
+    except requests.RequestException as e:
+        return jsonify({"error": f"Failed to fetch delays: {str(e)}"}), 500
 
 
 @app.route('/api/delays/top')
