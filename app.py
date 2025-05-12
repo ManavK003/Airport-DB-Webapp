@@ -190,6 +190,44 @@ def airport_activity(code):
     })
 
 
+@app.route('/api/airport_info/<code>')
+def airport_info(code):
+    cur = conn.cursor()
+    try:
+        cur.execute("""
+            SELECT name, city, country, iata, icao, latitude, longitude
+            FROM airports
+            WHERE iata = %s OR icao = %s
+            LIMIT 1
+        """, (code.upper(), code.upper()))
+        airport = cur.fetchone()
+
+        if not airport:
+            return jsonify({"error": "Airport not found"}), 404
+
+        # Extract IATA and ICAO codes
+        airport_keys = [desc[0] for desc in cur.description]
+        airport_data = dict(zip(airport_keys, airport))
+        iata_code = airport_data["iata"]
+        icao_code = airport_data["icao"]
+
+        # Fetch runways using both IATA and ICAO
+        cur.execute("""
+            SELECT runway_id, length_ft, width_ft, surface_type
+            FROM runways
+            WHERE airport_code = %s OR airport_code = %s
+        """, (iata_code, icao_code))
+        runways = cur.fetchall()
+        runways_data = [
+            dict(zip([desc[0] for desc in cur.description], row))
+            for row in runways
+        ]
+        airport_data["runways"] = runways_data
+
+        return jsonify(airport_data)
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 @app.route('/api/track/<icao24>')
 def track_flight(icao24):

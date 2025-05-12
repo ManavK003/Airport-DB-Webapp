@@ -183,14 +183,18 @@
     initMap();
     clearMarkers(airportMarkers);
 
-    data.forEach(({ name, city, country, latitude, longitude }) => {
-      if (latitude && longitude) {
-        const marker = L.marker([latitude, longitude])
-          .addTo(map)
-          .bindPopup(`<strong>${name}</strong><br>${city}, ${country}`);
-        airportMarkers.push(marker);
-      }
-    });
+    data.forEach(({ name, city, country, iata, icao, latitude, longitude }) => {
+        if (latitude && longitude) {
+          const marker = L.marker([latitude, longitude])
+            .addTo(map)
+            .bindPopup(`
+              <strong>${name}</strong><br>
+              ${city}, ${country}<br>
+              <button onclick="showAirportInfo('${iata || icao}')">View Info</button>
+            `);
+          airportMarkers.push(marker);
+        }
+      });
   }
 
   async function trackPlanes() {
@@ -305,6 +309,32 @@ async function getFlightStatus() {
     • Actual: ${actual_in}
     • Delay: ${arrival_delay ? `${Math.round(arrival_delay / 60)} min` : "None"}
   `.trim();
+  }
+  async function showAirportInfo(code) {
+    const res = await fetch(`/api/airport_info/${code}`);
+    const data = await res.json();
+    const output = document.createElement("div");
+  
+    if (data.error) {
+      output.textContent = `❌ ${data.error}`;
+    } else {
+      output.innerHTML = `
+        <h3>🛬 ${data.name} (${data.iata || data.icao})</h3>
+        <p><strong>Location:</strong> ${data.city}, ${data.country}</p>
+        ${data.timezone ? `<p><strong>Timezone:</strong> ${data.timezone}</p>` : ""}
+        ${data.phone ? `<p><strong>Contact:</strong> ${data.phone}</p>` : ""}
+        ${data.website ? `<p><strong>Website:</strong> <a href="${data.website}" target="_blank">${data.website}</a></p>` : ""}
+        <h4>Runways:</h4>
+        <ul>
+          ${data.runways.map(r => `<li>${r.runway_id}: ${r.length_ft} ft x ${r.width_ft} ft (${r.surface_type})</li>`).join("")}
+        </ul>
+      `;
+    }
+  
+    const popup = L.popup()
+      .setLatLng([data.latitude, data.longitude])
+      .setContent(output)
+      .openOn(map);
   }
   
 async function loadAirportBoard() {
