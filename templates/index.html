@@ -64,8 +64,23 @@
         <pre id="delay-results"></pre>
       </section>
 
-
-
+      <section>
+        <h2>🛬 Live Arrivals & Departures</h2>
+        <input type="text" id="board-code" placeholder="Enter airport code (e.g., JFK)">
+        <select id="flight-type">
+          <option value="arrivals">Arrivals</option>
+          <option value="departures">Departures</option>
+        </select>
+        <button onclick="loadAirportBoard()">Get Flights</button>
+        <pre id="board-results"></pre>
+      </section>
+      
+      <section>
+        <h2>📡 Flight Status Lookup</h2>
+        <input type="text" id="flight-number" placeholder="Enter flight number (e.g., DL2475)">
+        <button onclick="getFlightStatus()">Check Status</button>
+        <pre id="flight-status-results"></pre>
+      </section>
     <section>
       <h2>Landings Stats</h2>
       <button onclick="getLandings()">Show Landings</button>
@@ -248,6 +263,83 @@
       });
     }
 }
+async function getFlightStatus() {
+    const flightNumber = document.getElementById("flight-number").value.trim().toUpperCase();
+    const output = document.getElementById("flight-status-results");
+  
+    if (!flightNumber) {
+      alert("Please enter a flight number.");
+      return;
+    }
+  
+    const res = await fetch(`/api/flight_status/${flightNumber}`);
+    const data = await res.json();
+  
+    if (data.error) {
+      output.textContent = `❌ ${data.error}`;
+      return;
+    }
+  
+    const {
+      ident, origin, destination, status,
+      scheduled_out, estimated_out, actual_out,
+      scheduled_in, estimated_in, actual_in,
+      departure_delay, arrival_delay, aircraft_type
+    } = data;
+  
+    output.textContent = `
+  ✈️ Flight: ${ident}
+  From: ${origin?.code} (${origin?.city}) → To: ${destination?.code} (${destination?.city})
+  Status: ${status}
+  Aircraft: ${aircraft_type || "Unknown"}
+  
+  Departure
+    • Scheduled: ${scheduled_out}
+    • Estimated: ${estimated_out}
+    • Actual: ${actual_out}
+    • Delay: ${departure_delay ? `${Math.round(departure_delay / 60)} min` : "None"}
+  
+  Arrival
+    • Scheduled: ${scheduled_in}
+    • Estimated: ${estimated_in}
+    • Actual: ${actual_in}
+    • Delay: ${arrival_delay ? `${Math.round(arrival_delay / 60)} min` : "None"}
+  `.trim();
+  }
+  
+async function loadAirportBoard() {
+    const code = document.getElementById("board-code").value.trim().toUpperCase();
+    const type = document.getElementById("flight-type").value;
+  
+    if (!code) {
+      alert("Please enter an airport code.");
+      return;
+    }
+  
+    const res = await fetch(`/api/airportboards/${code}?type=${type}&howMany=10`);
+    const data = await res.json();
+    const output = document.getElementById("board-results");
+  
+    if (data.error) {
+      output.textContent = `❌ ${data.error}`;
+      return;
+    }
+  
+    if (!data.flights || data.flights.length === 0) {
+      output.textContent = `✅ No recent ${type} found for ${code}.`;
+      return;
+    }
+  
+    let result = `✈️ ${type.toUpperCase()} at ${code}:\n\n`;
+    data.flights.forEach(flight => {
+      result += `• ${flight.ident} from ${flight.origin.code} to ${flight.destination.code}\n`;
+      result += `  Scheduled: ${flight.scheduled_out}\n`;
+      result += `  Estimated: ${flight.estimated_out}\n\n`;
+    });
+  
+    output.textContent = result;
+  }
+  
 async function getRealTimeDelays() {
     const code = document.getElementById("delay-code").value.trim().toUpperCase();
     if (!code) {

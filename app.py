@@ -68,6 +68,47 @@ def get_delays_by_airport():
     except requests.RequestException as e:
         return jsonify({"error": f"Failed to fetch delays: {str(e)}"}), 500
 
+@app.route('/api/airportboards/<code>')
+def get_airport_boards(code):
+    flight_type = request.args.get("type", "arrivals")  # 'arrivals' or 'departures'
+    how_many = request.args.get("howMany", 10)
+
+    url = f"https://aeroapi.flightaware.com/aeroapi/airports/{code}/flights"
+    params = {
+        "type": flight_type,
+        "howMany": how_many
+    }
+    headers = {
+        "x-apikey": FLIGHTAWARE_API_KEY
+    }
+
+    try:
+        response = requests.get(url, headers=headers, params=params)
+        response.raise_for_status()
+        data = response.json()
+        if flight_type == "arrivals":
+            return jsonify({"flights": data.get("arrivals", [])})
+        else:
+            return jsonify({"flights": data.get("departures", [])})
+    except requests.RequestException as e:
+        return jsonify({"error": str(e)}), 500
+    
+@app.route('/api/flight_status/<flight_number>')
+def get_flight_status(flight_number):
+    headers = {
+        "x-apikey": FLIGHTAWARE_API_KEY
+    }
+    url = f"https://aeroapi.flightaware.com/aeroapi/flights/{flight_number.upper()}"
+
+    try:
+        response = requests.get(url, headers=headers)
+        response.raise_for_status()
+        flights = response.json().get("flights", [])
+        if not flights:
+            return jsonify({"error": "No data found for this flight."}), 404
+        return jsonify(flights[0])  # return the most recent flight record
+    except requests.RequestException as e:
+        return jsonify({"error": str(e)}), 500
 
 @app.route('/api/delays/top')
 def top_delays():
