@@ -52,7 +52,6 @@
             }
           </style>
         <p style="margin-left: 0.3em;">OpenSky Network API was used as a data source to pull the most recent flight tracking data. Popular and major airport codes to try: EHAM, EGLL, and EDDF.</p>
-        <p style="margin-left: 0.3em;">If you don't see live flight tracking icons on map, it might be because my OpenSky Free API has reached too many requests and has timed out.<br>This might require 3-5 mins to reset because flight tracking can be seen again.</p>
       </section>
 
     <section>
@@ -92,6 +91,16 @@
             <canvas id="airlineChart"></canvas>
           </div>
       </section>
+      <section id="radar-section">
+        <h2>🌦️ Live Weather Radar</h2>
+        <p>Weather radar centered on selected airport (requires valid lat/lon).</p>
+        <iframe id="weather-radar"
+                width="650"
+                height="450"
+                frameborder="0"
+                src="https://embed.windy.com/embed2.html?lat=40.6413&lon=-73.7781&zoom=8&overlay=radar">
+        </iframe>
+      </section>
       
     
   </div>
@@ -118,7 +127,22 @@
   }
 
 
+  function updateWeatherRadar(lat, lon) {
+    const iframe = document.getElementById("weather-radar");
+    iframe.src = `https://embed.windy.com/embed2.html?lat=${lat}&lon=${lon}&detailLat=${lat}&detailLon=${lon}&zoom=8&overlay=radar`;
+  
+    // Scroll to radar section
+    const radarSection = document.getElementById("radar-section");
+    if (radarSection) {
+      radarSection.scrollIntoView({ behavior: "smooth" });
+      radarSection.style.transition = 'background-color 0.5s';
+      radarSection.style.backgroundColor = '#222a'; // light highlight
 
+      setTimeout(() => {
+          radarSection.style.backgroundColor = 'transparent';
+      }, 1000);
+      }
+  }
 
   function clearMarkers(group) {
     group.forEach(m => map.removeLayer(m));
@@ -182,7 +206,8 @@
             .bindPopup(`
               <strong>${name}</strong><br>
               ${city}, ${country}<br>
-              <button onclick="showAirportInfo('${iata || icao}')">View Info</button>
+              <button onclick="showAirportInfo('${iata || icao}')">View Info</button><br>
+              <button onclick="updateWeatherRadar(${latitude}, ${longitude})">Show Radar</button>
             `);
           airportMarkers.push(marker);
         }
@@ -241,6 +266,7 @@
 
       const { lat, lon } = data.location;
       map.setView([lat, lon], 6);
+      updateWeatherRadar(lat, lon); 
 
       const airportMarker = L.circleMarker([lat, lon], {
         radius: 8,

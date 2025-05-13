@@ -9,3 +9,4 @@ Live Arrival and Departure using Flight Aware Arrival and Departure API
 Added Flight Staus feature using Flight Aware API
 Added airport information to airport location marker (Note: Some parts of the runways information presented here might be fake generated to display functionality of this feature)
 Added airline performance stats based on airport performace data taken from BTS Bureau of Transportation Statistics
+Location based live weather radar using Windy.com
