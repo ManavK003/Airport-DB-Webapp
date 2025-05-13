@@ -189,6 +189,22 @@ def airport_activity(code):
         "location": {"lat": lat, "lon": lon}
     })
 
+@app.route('/api/airport_coords')
+def get_airport_coords():
+    code = request.args.get('code', '').upper()
+    if not code:
+        return jsonify({"error": "Missing airport code"}), 400
+
+    cur = conn.cursor()
+    cur.execute("""
+        SELECT latitude, longitude FROM airports
+        WHERE iata = %s OR icao = %s
+        LIMIT 1
+    """, (code, code))
+    result = cur.fetchone()
+    if result:
+        return jsonify({"lat": result[0], "lon": result[1]})
+    return jsonify({"error": "Airport not found"}), 404
 
 @app.route('/api/airport_info/<code>')
 def airport_info(code):

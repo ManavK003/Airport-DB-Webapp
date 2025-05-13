@@ -54,7 +54,7 @@
         <p style="margin-left: 0.3em;">OpenSky Network API was used as a data source to pull the most recent flight tracking data. Popular and major airport codes to try: EHAM, EGLL, and EDDF.</p>
       </section>
 
-    <section>
+    <section id="map-section">
       <h2>🌍 Map of Search Results</h2>
       <div id="map" style="height: 400px; margin-top: 10px;"></div>
     </section>
@@ -95,11 +95,18 @@
         <h2>🌦️ Live Weather Radar</h2>
         <p>Weather radar centered on selected airport (requires valid lat/lon).</p>
         <iframe id="weather-radar"
-                width="650"
-                height="450"
+                width="550"
+                height="390"
                 frameborder="0"
                 src="https://embed.windy.com/embed2.html?lat=40.6413&lon=-73.7781&zoom=8&overlay=radar">
         </iframe>
+      </section>
+      <section>
+        <h2>🛫 Flight Route Visualization</h2>
+        <input type="text" id="origin-code" placeholder="Origin Airport Code (e.g., JFK)">
+        <input type="text" id="destination-code" placeholder="Destination Airport Code (e.g., LAX)">
+        <button onclick="drawFlightRoute()">Draw Route</button>
+        <pre id="route-info"></pre>
       </section>
       
     
@@ -142,6 +149,26 @@
           radarSection.style.backgroundColor = 'transparent';
       }, 1000);
       }
+  }
+  function getCurvedLatLngs(start, end, curvature = 0.5) {
+    const lat1 = start[0], lon1 = start[1];
+    const lat2 = end[0], lon2 = end[1];
+  
+    const offsetX = lon2 - lon1;
+    const offsetY = lat2 - lat1;
+  
+    const r = Math.sqrt(offsetX * offsetX + offsetY * offsetY);
+    const theta = Math.atan2(offsetY, offsetX);
+  
+    const thetaOffset = (Math.PI / 10) * curvature;
+  
+    const r2 = (r / 2) / Math.cos(thetaOffset);
+    const theta2 = theta + thetaOffset;
+  
+    const midpointX = r2 * Math.cos(theta2) + lon1;
+    const midpointY = r2 * Math.sin(theta2) + lat1;
+  
+    return [start, [midpointY, midpointX], end]; // [lat, lon]
   }
 
   function clearMarkers(group) {
@@ -328,6 +355,67 @@ async function getFlightStatus() {
     • Delay: ${arrival_delay ? `${Math.round(arrival_delay / 60)} min` : "None"}
   `.trim();
   }
+
+  let routeLine;
+
+  async function drawFlightRoute() {
+
+    if (!map) {
+        initMap();
+      }
+
+    const originCode = document.getElementById("origin-code").value.trim().toUpperCase();
+    const destCode = document.getElementById("destination-code").value.trim().toUpperCase();
+    const output = document.getElementById("route-info");
+  
+    if (!originCode || !destCode) {
+      alert("Please enter both origin and destination airport codes.");
+      return;
+    }
+  
+    // Scroll to map
+    const mapSection = document.getElementById("map-section");
+    if (mapSection) {
+      mapSection.scrollIntoView({ behavior: "smooth" });
+      mapSection.style.transition = 'background-color 0.5s';
+      mapSection.style.backgroundColor = '#222a';
+      setTimeout(() => mapSection.style.backgroundColor = 'transparent', 1000);
+    }
+  
+    const [originRes, destRes] = await Promise.all([
+      fetch(`/api/airport_coords?code=${originCode}`),
+      fetch(`/api/airport_coords?code=${destCode}`)
+    ]);
+  
+    const originData = await originRes.json();
+    const destData = await destRes.json();
+  
+    if (originData.error || destData.error) {
+      output.textContent = `❌ Error: ${originData.error || destData.error}`;
+      return;
+    }
+  
+    const originLatLng = [originData.lat, originData.lon];
+    const destLatLng = [destData.lat, destData.lon];
+  
+    
+    const curvedCoords = getCurvedLatLngs(originLatLng, destLatLng, 0.4);  
+    // Remove previous route
+    if (window.routeLine) map.removeLayer(window.routeLine);
+
+    window.routeLine = L.polyline(curvedCoords, {
+    color: "red",
+    weight: 3,
+    dashArray: "5,10"
+    }).addTo(map);
+  
+    map.fitBounds([originLatLng, destLatLng], { padding: [50, 50] });
+  
+    output.textContent = `✅ Route: ${originCode} ➝ ${destCode}`;
+  }
+
+
+
   async function showAirportInfo(code) {
     const res = await fetch(`/api/airport_info/${code}`);
     const data = await res.json();
