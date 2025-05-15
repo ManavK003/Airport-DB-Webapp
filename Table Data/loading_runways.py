@@ -1,0 +1,64 @@
+import psycopg2
+import csv
+from dotenv import load_dotenv
+import os
+
+
+load_dotenv()
+
+DB_PARAMS = {
+    "dbname": os.getenv("DB_NAME"),
+    "user": os.getenv("DB_USER"),
+    "password": os.getenv("DB_PASSWORD"),
+    "host": os.getenv("DB_HOST"),
+    "port": os.getenv("DB_PORT")
+}
+
+CSV_FILE = "cleaned_runways.csv"  
+
+def load_runways():
+    try:
+        conn = psycopg2.connect(**DB_PARAMS)
+        cur = conn.cursor()
+
+        # Drop old table
+        cur.execute("DROP TABLE IF EXISTS runways CASCADE;")
+
+        # Create new table
+        cur.execute("""
+            CREATE TABLE runways (
+                runway_id INTEGER PRIMARY KEY,
+                airport_code VARCHAR(10),
+                length_ft INTEGER,
+                width_ft INTEGER,
+                surface_type TEXT
+            );
+        """)
+
+        # Load CSV data
+        with open(CSV_FILE, 'r') as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                cur.execute("""
+                    INSERT INTO runways (runway_id, airport_code, length_ft, width_ft, surface_type)
+                    VALUES (%s, %s, %s, %s, %s)
+                """, (
+                    int(row['runway_id']),
+                    row['airport_code'],
+                    int(float(row['length_ft'])) if row['length_ft'] else None,
+                    int(float(row['width_ft'])) if row['width_ft'] else None,
+                    row['surface_type']
+                ))
+
+        conn.commit()
+        print("Runways table successfully loaded.")
+
+    except Exception as e:
+        print(" Error:", e)
+
+    finally:
+        if conn:
+            conn.close()
+
+if __name__ == "__main__":
+    load_runways()
