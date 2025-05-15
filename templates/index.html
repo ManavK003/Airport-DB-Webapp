@@ -1,0 +1,679 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>🛫 Airport Dashboard</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <style>
+    .leaflet-div-icon {
+      font-size: 30px;
+      text-align: center;
+      line-height: 1;
+    }
+  </style>
+
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+  <header>
+    <h1>Global Airport Intelligence & Flight Tracking Database</h1>
+  </header>
+
+  <div class="content-wrapper"> 
+
+    <section>
+      <h2>🔍 Search Airports by City, Country, or IATA Code</h2>
+      <input type="text" id="city" placeholder="e.g., Toronto or Canada or JFK">
+      <button onclick="searchAirports()">Search</button>
+      <pre id="airport-results"></pre>
+    </section>
+
+    <section>
+        <h2>🛩️ Live Aircraft Tracker</h2>
+        <input type="text" id="plane-code" placeholder="Enter ICAO24 or Callsign (optional)">
+        <input type="text" id="airport-code" placeholder="Airport IATA Code (optional)">
+        <button onclick="trackPlanes()">Track Planes</button>
+        <pre id="plane-results"></pre>
+        
+        <p class="note-text">
+            Note: The data used for the flight tracking section of this project might have some limitations. This project was developed as a small side interest project of mine, because of which, the most realistic, best, and accurate flight tracking real-time data might not be used in this section for now. The map tries to present as accurately as possible the flight tracking details around an airport or for a specific aircraft in a 6-hour timeframe. Flight location we try to present might be the last known location of the flight.
+          </p>
+          
+          <style>
+            .note-text {
+              margin-left: -1em;      
+              text-indent: -2.8em;   
+              padding-left: 4em;       
+              color: white;
+              font-size: 1rem;
+              line-height: 1.5;
+            }
+          </style>
+        <p style="margin-left: 0.3em;">OpenSky Network API was used as a data source to pull the most recent flight tracking data. Popular and major airport codes to try: EHAM, EGLL, and EDDF.</p>
+      </section>
+
+    <section id="map-section">
+      <h2>🌍 Map of Search Results</h2>
+      <div id="map" style="height: 400px; margin-top: 10px;"></div>
+    </section>
+    <section>
+        <h2>🕒 Real-Time Delays by Airport</h2>
+        <input type="text" id="delay-code" placeholder="Enter IATA or ICAO code (e.g., JFK)">
+        <button onclick="getRealTimeDelays()">Check Live Delays</button>
+        <pre id="delay-results"></pre>
+      </section>
+
+      <section>
+        <h2>🛬 Live Arrivals & Departures</h2>
+        <input type="text" id="board-code" placeholder="Enter airport code (e.g., JFK)">
+        <select id="flight-type">
+          <option value="arrivals">Arrivals</option>
+          <option value="departures">Departures</option>
+        </select>
+        <button onclick="loadAirportBoard()">Get Flights</button>
+        <pre id="board-results"></pre>
+      </section>
+      
+      <section>
+        <h2>📡 Flight Status Lookup</h2>
+        <input type="text" id="flight-number" placeholder="Enter flight number (e.g., DL2475)">
+        <button onclick="getFlightStatus()">Check Status</button>
+        <pre id="flight-status-results"></pre>
+      </section>
+      <section>
+        <h2>📊 Airline On-Time Stats</h2>
+        <input type="text" id="stat-airport" placeholder="Optional airport code (e.g., JFK)">
+        <button onclick="loadAirlineStats()">Show Stats</button>
+        <pre id="airline-stats-results"></pre>
+        <div style="max-width: 500px; margin-top: 20px;">
+            <canvas id="airlineChart"></canvas>
+          </div>
+      </section>
+      <section id="radar-section">
+        <h2>🌦️ Live Weather Radar</h2>
+        <p>Weather radar centered on selected airport (requires valid lat/lon).</p>
+        <iframe id="weather-radar"
+                width="550"
+                height="390"
+                frameborder="0"
+                src="https://embed.windy.com/embed2.html?lat=40.6413&lon=-73.7781&zoom=8&overlay=radar">
+        </iframe>
+      </section>
+      <section>
+        <h2>🛫 Flight Route Visualization</h2>
+        <input type="text" id="origin-code" placeholder="Origin Airport Code (e.g., JFK)">
+        <input type="text" id="destination-code" placeholder="Destination Airport Code (e.g., LAX)">
+        <button onclick="drawFlightRoute()">Draw Route</button>
+        <pre id="route-info"></pre>
+      </section>
+      
+    
+  </div>
+
+
+  <script>
+    let map;
+    const planeIcon = L.divIcon({
+        html: "✈️",
+        iconSize: [30, 30],
+        className: '',
+      });
+    
+      let airportMarkers = [];
+  let flightMarkers = [];
+
+
+  // Create map once
+  function initMap() {
+    if (!map) {
+      map = L.map('map').setView([20, 0], 2);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+    }
+  }
+
+
+  function updateWeatherRadar(lat, lon) {
+    const iframe = document.getElementById("weather-radar");
+    iframe.src = `https://embed.windy.com/embed2.html?lat=${lat}&lon=${lon}&detailLat=${lat}&detailLon=${lon}&zoom=8&overlay=radar`;
+  
+    // Scroll to radar section
+    const radarSection = document.getElementById("radar-section");
+    if (radarSection) {
+      radarSection.scrollIntoView({ behavior: "smooth" });
+      radarSection.style.transition = 'background-color 0.5s';
+      radarSection.style.backgroundColor = '#222a'; // light highlight
+
+      setTimeout(() => {
+          radarSection.style.backgroundColor = 'transparent';
+      }, 1000);
+      }
+  }
+  function getCurvedLatLngs(start, end, curvature = 0.5) {
+    const lat1 = start[0], lon1 = start[1];
+    const lat2 = end[0], lon2 = end[1];
+  
+    const offsetX = lon2 - lon1;
+    const offsetY = lat2 - lat1;
+  
+    const r = Math.sqrt(offsetX * offsetX + offsetY * offsetY);
+    const theta = Math.atan2(offsetY, offsetX);
+  
+    const thetaOffset = (Math.PI / 10) * curvature;
+  
+    const r2 = (r / 2) / Math.cos(thetaOffset);
+    const theta2 = theta + thetaOffset;
+  
+    const midpointX = r2 * Math.cos(theta2) + lon1;
+    const midpointY = r2 * Math.sin(theta2) + lat1;
+  
+    return [start, [midpointY, midpointX], end]; // [lat, lon]
+  }
+
+  function clearMarkers(group) {
+    group.forEach(m => map.removeLayer(m));
+    group.length = 0;
+  }
+
+
+
+
+  async function searchAirports() {
+    const city = document.getElementById('city').value;
+
+
+    const res = await fetch(`/api/airports/search?city=${city}`);
+
+    const data = await res.json();
+
+    const output = document.getElementById('airport-results');
+    output.innerHTML = '';
+
+    if (!data.length) {
+      output.innerHTML = '<p class="no-results">No results found.</p>';
+      return;
+    }
+
+    // Update results table
+    const table = document.createElement('table');
+    table.className = 'result-table';
+    const headers = Object.keys(data[0]);
+    const thead = document.createElement('thead');
+    const headRow = document.createElement('tr');
+    headers.forEach(h => {
+      const th = document.createElement('th');
+      th.textContent = h;
+      headRow.appendChild(th);
+    });
+    thead.appendChild(headRow);
+    table.appendChild(thead);
+
+    const tbody = document.createElement('tbody');
+    data.forEach(row => {
+      const tr = document.createElement('tr');
+      headers.forEach(h => {
+        const td = document.createElement('td');
+        td.textContent = row[h];
+        tr.appendChild(td);
+      });
+      tbody.appendChild(tr);
+    });
+    table.appendChild(tbody);
+    output.appendChild(table);
+
+    // Plot airports without clearing flight markers
+    initMap();
+    clearMarkers(airportMarkers);
+
+    data.forEach(({ name, city, country, iata, icao, latitude, longitude }) => {
+        if (latitude && longitude) {
+          const marker = L.marker([latitude, longitude])
+            .addTo(map)
+            .bindPopup(`
+              <strong>${name}</strong><br>
+              ${city}, ${country}<br>
+              <button onclick="showAirportInfo('${iata || icao}')">View Info</button><br>
+              <button onclick="updateWeatherRadar(${latitude}, ${longitude})">Show Radar</button>
+            `);
+          airportMarkers.push(marker);
+        }
+      });
+  }
+
+  async function trackPlanes() {
+    const code = document.getElementById('plane-code').value.trim();
+    const airport = document.getElementById('airport-code').value.trim();
+
+    if (!airport && !code) {
+      alert("Please enter either a plane code or an airport code.");
+      return;
+    }
+
+    initMap();
+    clearMarkers(flightMarkers); // Clear only flight markers
+
+   
+    if (code) {
+      let trackUrl = "";
+
+      if (/^[0-9a-fA-F]{6}$/.test(code)) {
+        trackUrl = `/api/track/${code}`;
+      } else {
+        const lookupRes = await fetch(`/api/lookup_icao24/${code}`);
+        const lookupData = await lookupRes.json();
+        if (!lookupData.icao24) {
+          alert("No flight found with that callsign.");
+          return;
+        }
+        trackUrl = `/api/track/${lookupData.icao24}`;
+      }
+
+      const trackRes = await fetch(trackUrl);
+      const trackData = await trackRes.json();
+
+      if (trackData.path && trackData.path.length > 0) {
+        const [_, lat, lon] = trackData.path[trackData.path.length - 1];
+        const marker = L.marker([lat, lon], { icon: planeIcon })
+          .addTo(map)
+          .bindPopup(`✈️ ${code.toUpperCase()} (last known position)`);
+        flightMarkers.push(marker);
+        map.setView([lat, lon], 5);
+      } else {
+        alert("No recent track data available.");
+      }
+
+      return;
+    }
+
+  
+    if (airport) {
+      const res = await fetch(`/api/airport_activity/${airport}`);
+      const data = await res.json();
+
+      const { lat, lon } = data.location;
+      map.setView([lat, lon], 6);
+      updateWeatherRadar(lat, lon); 
+
+      const airportMarker = L.circleMarker([lat, lon], {
+        radius: 8,
+        color: "blue",
+        fillOpacity: 0.5,
+      }).addTo(map).bindPopup(`Airport: ${airport}`);
+      flightMarkers.push(airportMarker);
+
+      data.arrivals.forEach(flight => {
+        if (flight.latitude && flight.longitude) {
+          const marker = L.marker([flight.latitude, flight.longitude], { icon: planeIcon })
+            .addTo(map)
+            .bindTooltip(`${flight.callsign || "N/A"}`, { direction: "top" });
+          flightMarkers.push(marker);
+        }
+      });
+    }
+}
+async function getFlightStatus() {
+    const flightNumber = document.getElementById("flight-number").value.trim().toUpperCase();
+    const output = document.getElementById("flight-status-results");
+  
+    if (!flightNumber) {
+      alert("Please enter a flight number.");
+      return;
+    }
+  
+    const res = await fetch(`/api/flight_status/${flightNumber}`);
+    const data = await res.json();
+  
+    if (data.error) {
+      output.textContent = `❌ ${data.error}`;
+      return;
+    }
+  
+    const {
+      ident, origin, destination, status,
+      scheduled_out, estimated_out, actual_out,
+      scheduled_in, estimated_in, actual_in,
+      departure_delay, arrival_delay, aircraft_type
+    } = data;
+  
+    output.textContent = `
+  ✈️ Flight: ${ident}
+  From: ${origin?.code} (${origin?.city}) → To: ${destination?.code} (${destination?.city})
+  Status: ${status}
+  Aircraft: ${aircraft_type || "Unknown"}
+  
+  Departure
+    • Scheduled: ${scheduled_out}
+    • Estimated: ${estimated_out}
+    • Actual: ${actual_out}
+    • Delay: ${departure_delay ? `${Math.round(departure_delay / 60)} min` : "None"}
+  
+  Arrival
+    • Scheduled: ${scheduled_in}
+    • Estimated: ${estimated_in}
+    • Actual: ${actual_in}
+    • Delay: ${arrival_delay ? `${Math.round(arrival_delay / 60)} min` : "None"}
+  `.trim();
+  }
+
+  let routeLine;
+
+  async function drawFlightRoute() {
+
+    if (!map) {
+        initMap();
+      }
+
+    const originCode = document.getElementById("origin-code").value.trim().toUpperCase();
+    const destCode = document.getElementById("destination-code").value.trim().toUpperCase();
+    const output = document.getElementById("route-info");
+  
+    if (!originCode || !destCode) {
+      alert("Please enter both origin and destination airport codes.");
+      return;
+    }
+  
+    // Scroll to map
+    const mapSection = document.getElementById("map-section");
+    if (mapSection) {
+      mapSection.scrollIntoView({ behavior: "smooth" });
+      mapSection.style.transition = 'background-color 0.5s';
+      mapSection.style.backgroundColor = '#222a';
+      setTimeout(() => mapSection.style.backgroundColor = 'transparent', 1000);
+    }
+  
+    const [originRes, destRes] = await Promise.all([
+      fetch(`/api/airport_coords?code=${originCode}`),
+      fetch(`/api/airport_coords?code=${destCode}`)
+    ]);
+  
+    const originData = await originRes.json();
+    const destData = await destRes.json();
+  
+    if (originData.error || destData.error) {
+      output.textContent = `❌ Error: ${originData.error || destData.error}`;
+      return;
+    }
+  
+    const originLatLng = [originData.lat, originData.lon];
+    const destLatLng = [destData.lat, destData.lon];
+  
+    
+    const curvedCoords = getCurvedLatLngs(originLatLng, destLatLng, 0.4);  
+    // Remove previous route
+    if (window.routeLine) map.removeLayer(window.routeLine);
+
+    window.routeLine = L.polyline(curvedCoords, {
+    color: "red",
+    weight: 3,
+    dashArray: "5,10"
+    }).addTo(map);
+  
+    map.fitBounds([originLatLng, destLatLng], { padding: [50, 50] });
+  
+    output.textContent = `✅ Route: ${originCode} ➝ ${destCode}`;
+  }
+
+
+
+  async function showAirportInfo(code) {
+    const res = await fetch(`/api/airport_info/${code}`);
+    const data = await res.json();
+    const output = document.createElement("div");
+  
+    if (data.error) {
+      output.textContent = `❌ ${data.error}`;
+    } else {
+      output.innerHTML = `
+        <h3>🛬 ${data.name} (${data.iata || data.icao})</h3>
+        <p><strong>Location:</strong> ${data.city}, ${data.country}</p>
+        ${data.timezone ? `<p><strong>Timezone:</strong> ${data.timezone}</p>` : ""}
+        ${data.phone ? `<p><strong>Contact:</strong> ${data.phone}</p>` : ""}
+        ${data.website ? `<p><strong>Website:</strong> <a href="${data.website}" target="_blank">${data.website}</a></p>` : ""}
+        <h4>Runways:</h4>
+        <ul>
+          ${data.runways.map(r => `<li>${r.runway_id}: ${r.length_ft} ft x ${r.width_ft} ft (${r.surface_type})</li>`).join("")}
+        </ul>
+      `;
+    }
+  
+    const popup = L.popup()
+      .setLatLng([data.latitude, data.longitude])
+      .setContent(output)
+      .openOn(map);
+  }
+  
+async function loadAirportBoard() {
+    const code = document.getElementById("board-code").value.trim().toUpperCase();
+    const type = document.getElementById("flight-type").value;
+  
+    if (!code) {
+      alert("Please enter an airport code.");
+      return;
+    }
+  
+    const res = await fetch(`/api/airportboards/${code}?type=${type}&howMany=10`);
+    const data = await res.json();
+    const output = document.getElementById("board-results");
+  
+    if (data.error) {
+      output.textContent = `❌ ${data.error}`;
+      return;
+    }
+  
+    if (!data.flights || data.flights.length === 0) {
+      output.textContent = `✅ No recent ${type} found for ${code}.`;
+      return;
+    }
+  
+    let result = `✈️ ${type.toUpperCase()} at ${code}:\n\n`;
+    data.flights.forEach(flight => {
+      result += `• ${flight.ident} from ${flight.origin.code} to ${flight.destination.code}\n`;
+      result += `  Scheduled: ${flight.scheduled_out}\n`;
+      result += `  Estimated: ${flight.estimated_out}\n\n`;
+    });
+  
+    output.textContent = result;
+  }
+  
+async function getRealTimeDelays() {
+    const code = document.getElementById("delay-code").value.trim().toUpperCase();
+    if (!code) {
+      alert("Please enter an airport code.");
+      return;
+    }
+  
+    const res = await fetch(`/api/delays/by-airport?code=${code}`);
+    const data = await res.json();
+  
+    const output = document.getElementById("delay-results");
+    output.textContent = "";
+  
+    if (data.error) {
+      output.textContent = `❌ ${data.error}`;
+      return;
+    }
+  
+    if (!data.delay_secs || !data.reasons || data.reasons.length === 0) {
+      output.textContent = `✅ No major delays reported at ${code}.`;
+      return;
+    }
+  
+    let result = `✈️ Delays for ${code}:\n\nDelay Reason: ${data.category.toUpperCase()}\nEstimated Delay Time: ${Math.round(data.delay_secs / 60)} minutes total\n\n`;
+    data.reasons.forEach(r => {
+        let capitalizedReason = r.reason.charAt(0).toUpperCase() + r.reason.slice(1);
+        result += `${capitalizedReason} (Category: ${r.category}, Color: ${r.color})\n`;
+    });
+  
+    output.textContent = result;
+  }
+  
+  let airlineChart; 
+
+async function loadAirlineStats() {
+  const code = document.getElementById("stat-airport").value.trim().toUpperCase();
+  const res = await fetch(`/api/airline_stats${code ? `?airport=${code}` : ''}`);
+  const data = await res.json();
+  const output = document.getElementById("airline-stats-results");
+
+  if (data.error) {
+    output.textContent = `❌ ${data.error}`;
+    return;
+  }
+
+  if (!data.length) {
+    output.textContent = "No stats found.";
+    return;
+  }
+
+ 
+  let result = `📈 Airline On-Time Performance${code ? ` at ${code}` : ''}:\n\n`;
+  result += `Carrier          | Flights | On-Time %\n`;
+  result += `-----------------|---------|-----------\n`;
+
+  const labels = [];
+  const values = [];
+
+  data.forEach(row => {
+    const onTime = Number(row.on_time_pct);
+    const displayPct = isNaN(onTime) ? "N/A" : `${onTime.toFixed(2)}%`;
+    result += `${row.carrier_name.padEnd(17)}| ${row.total_flights.toString().padEnd(7)}| ${displayPct}\n`;
+
+    labels.push(row.carrier_name);
+    values.push(onTime);
+  });
+
+  output.textContent = result;
+
+  // Draw or update the chart
+  const ctx = document.getElementById('airlineChart').getContext('2d');
+  if (airlineChart) {
+    airlineChart.destroy(); 
+  }
+
+  airlineChart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: labels,
+      datasets: [{
+        label: 'On-Time %',
+        data: values,
+        backgroundColor: 'rgba(0, 153, 255, 0.6)',
+        borderColor: 'rgba(0, 102, 204, 1)',
+        borderWidth: 1
+      }]
+    },
+    options: {
+        responsive: true,
+        scales: {
+          y: {
+            beginAtZero: true,
+            max: 100,
+            title: {
+              display: true,
+              text: 'Percentage (%)',
+              color: '#ffffff'  // Y-axis label
+            },
+            ticks: {
+              color: '#ffffff'  // Y-axis tick labels
+            }
+          },
+          x: {
+            ticks: {
+              color: '#ffffff'  // X-axis labels
+            }
+          }
+        },
+        plugins: {
+          legend: {
+            display: false,
+            labels: {
+              color: '#ffffff'  // Legend text if you enable it
+            }
+          },
+          tooltip: {
+            callbacks: {
+              label: function(context) {
+                return ` ${context.parsed.y.toFixed(2)}% on-time`;
+              }
+            }
+          }
+        }
+      }
+  });
+}
+
+  
+    
+
+      
+    async function loadPlanes() {
+        const input = document.getElementById('plane-or-airport').value.trim().toUpperCase();
+        const planeIcon = L.divIcon({
+            html: "✈️",  
+            iconSize: [20, 20],
+            className: ''  
+          });
+        if (map) map.remove();  // Reset map
+        map = L.map('map').setView([20, 0], 2);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+      
+        if (!input) {
+         
+
+          const res = await fetch('/api/planes/live');
+          const data = await res.json();
+      
+          data.states.forEach(([_, callsign, , , , lon, lat, , , , , , , icao24]) => {
+            if (lat && lon) {
+                L.marker([lat, lon], { icon: planeIcon })
+                .addTo(map)
+                .bindTooltip(`${callsign || icao24}`, { direction: 'top' });
+            }
+          });
+        } else if (input.length === 6 || /^[0-9A-F]{6}$/.test(input)) {
+    
+
+          const res = await fetch(`/api/track/${input}`);
+          const data = await res.json();
+      
+          const coords = data.path.map(p => [p.latitude, p.longitude]);
+          if (coords.length > 0) {
+            L.polyline(coords, { color: 'red' }).addTo(map);
+            map.setView(coords[coords.length - 1], 6);
+          } else {
+            alert("Our flight data might be a little too limited to track this particular flight. Popular airport options: EHAM, EGLL, EDDF...");
+          }
+        } else {
+        
+
+          const res = await fetch(`/api/airport_activity/${input}`);
+          const data = await res.json();
+          const allFlights = [...data.arrivals, ...data.departures];
+      
+          allFlights.forEach(flight => {
+            const lat = flight.estArrivalAirportHorizDistance ? flight.estArrivalAirportHorizDistance / 100000 : null;
+            const lon = flight.estDepartureAirportHorizDistance ? flight.estDepartureAirportHorizDistance / 100000 : null;
+            if (lat && lon) {
+                L.marker([lat, lon], { icon: planeIcon })
+                .addTo(map)
+                .bindPopup(`Flight: ${flight.callsign || "Unknown"}`);
+            }
+          });
+        }
+      }
+      
+
+
+    async function getDelays() {
+      const res = await fetch('/api/delays/top');
+      document.getElementById('delay-results').textContent = JSON.stringify(await res.json(), null, 2);
+    }
+
+
+   
+  </script>
+</body>
+</html>
+
+
