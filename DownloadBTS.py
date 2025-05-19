@@ -1,66 +1,67 @@
 import os
 import time
-import requests
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import Select, WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
 
-# Change this to your actual folder
-DOWNLOAD_DIR = "/Users/manavkanaganapalli/Desktop/Airport Landings Database and Webapp/ML Data/Arrival_Departure"
+# Set up download directory
+DOWNLOAD_DIR = "/Users/manavkanaganapalli/Desktop/Airport Landings Database and Webapp/old"
 os.makedirs(DOWNLOAD_DIR, exist_ok=True)
 
-iata_codes = [
-    "BOS", "OAK", "OGG", "MCI", "PHX", "SFO", "LAX", "CLE", "CVG", "EWR",
-    "DAL", "FLL", "SLC", "IAH", "HOU", "PIT", "MIA", "SEA", "IND", "SAT",
-    "RDU", "BUR", "DTW", "TPA", "DFW", "AUS", "STL", "ATL", "JAX", "IAD",
-    "MKE", "PDX", "HNL", "SAN", "ONT", "MDW", "SJC", "DEN", "PHL", "RSW",
-    "JFK", "RNO", "SMF", "ORD", "BWI", "MSP", "SNA", "CLT", "LAS", "MCO"
-]
+# Set up Chrome driver options
+options = webdriver.ChromeOptions()
+options.headless = False  # Set to True once stable
+options.add_experimental_option("prefs", {
+    "download.default_directory": DOWNLOAD_DIR,
+    "download.prompt_for_download": False,
+    "directory_upgrade": True,
+    "safebrowsing.enabled": True
+})
 
-years = list(range(2018, 2026))
-BTS_CSV_URL = "https://www.transtats.bts.gov/DownLoad_Table.asp?Table_ID=236"
+driver = webdriver.Chrome(options=options)
+wait = WebDriverWait(driver, 20)
 
-fields = [
-    "Year", "Month", "DayofMonth", "FlightDate", "Carrier", "FlightNum",
-    "Origin", "Dest", "DepTime", "DepDelay", "ArrTime", "ArrDelay", "Cancelled",
-    "CancellationCode", "CarrierDelay", "WeatherDelay", "NASDelay", "SecurityDelay",
-    "LateAircraftDelay"
-]
+URL = "https://www.transtats.bts.gov/DL_SelectFields.aspx?gnoyr_VQ=FGJ&QO_fu146_anzr=b0-gvzr"
 
-headers = {
-    "User-Agent": "Mozilla/5.0",
-    "Content-Type": "application/x-www-form-urlencoded"
-}
-
-for airport in iata_codes:
-    for year in years:
-        print(f"📥 Downloading {airport} - {year}...")
-        payload = {
-            "UserTableName": "On_Time_Performance",
-            "DBShortName": "On_Time",
-            "RawDataTable": "On_Time_Performance",
-            "sqlstr": f"SELECT {','.join(fields)} FROM On_Time_Performance WHERE Origin = '{airport}' AND Year = {year}",
-            "varlist": ",".join(fields),
-            "grouplist": "",
-            "suml": "",
-            "sumRegion": "",
-            "filter1": "title",
-            "filter2": "title",
-            "geo": "Origin",
-            "time": "Year"
-        }
-
+for year in range(2018, 2026):
+    for month in range(1, 13):
         try:
-            response = requests.post(BTS_CSV_URL, headers=headers, data=payload, timeout=60)
-            if response.ok and len(response.content) > 1000:  # sanity check
-                filename = f"{airport}_{year}.csv"
-                filepath = os.path.join(DOWNLOAD_DIR, filename)
-                with open(filepath, "wb") as f:
-                    f.write(response.content)
-                print(f"✅ Saved: {filename}")
-            else:
-                print(f"⚠️ Empty or failed data: {airport} - {year}")
+            driver.get(URL)
+
+            # Select year
+            wait.until(EC.presence_of_element_located((By.ID, "cboYear")))
+            Select(driver.find_element(By.ID, "cboYear")).select_by_visible_text(str(year))
+
+            # Select month
+            month_name = time.strftime("%B", time.strptime(str(month), "%m"))
+            Select(driver.find_element(By.ID, "cboPeriod")).select_by_visible_text(month_name)
+
+            # Uncheck pre-zipped if needed
+            try:
+                prezip = driver.find_element(By.ID, "chkDownloadZip")
+                if prezip.is_selected():
+                    prezip.click()
+            except:
+                pass
+
+            # Check all checkboxes
+            checkboxes = driver.find_elements(By.XPATH, '//input[@type="checkbox" and contains(@id,"chk_")]')
+            for cb in checkboxes:
+                try:
+                    if not cb.is_selected():
+                        cb.click()
+                except Exception as e:
+                    print(f"⚠️ Failed to check box: {e}")
+
+            # Click the download button
+            download_btn = wait.until(EC.element_to_be_clickable((By.ID, "btnDownload")))
+            download_btn.click()
+
+            print(f"✅ Triggered download for {year}-{month:02d}")
+            time.sleep(10)  # Wait for download to complete
+
         except Exception as e:
-            print(f"❌ Error: {airport} - {year} | {str(e)}")
+            print(f"❌ Error for {year}-{month:02d}: {e}")
 
-        time.sleep(1)  # gentle on server
-
-print("🎉 Done downloading all requested data.")
-
+driver.quit()
