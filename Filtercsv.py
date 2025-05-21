@@ -21,7 +21,7 @@ df = pd.read_csv(input_file, low_memory=False)
 
 filtered_df = df[df["ORIGIN"].isin(iata_codes)]
 
-output_file = os.path.join(output_dir, "oct2020.csv")
+output_file = os.path.join(output_dir, "nov2022.csv")
 filtered_df.to_csv(output_file, index=False)
 
 print(f"Filtered CSV saved to: {output_file}")
